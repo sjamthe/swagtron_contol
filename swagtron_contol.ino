@@ -44,6 +44,7 @@ bool lognow = true;
 void setup() {
    LOG_SERIAL.begin(LOG_SPEED);
    LOG_INIT_STREAM(LOG_LEVEL, &LOG_SERIAL);
+   delay(2000);
    /** Wait 1s to get setup logs */
    _cmdListener.init();
    _p_hoverboard.init();
@@ -211,14 +212,16 @@ void Hoverboard::init(void)
 
   LEFT_MOTOR.begin(MOTOR_BAUD, MOTOR_CONFIG);
   RIGHT_MOTOR.begin(MOTOR_BAUD, MOTOR_CONFIG);
-  /*
-  if(POWER_STATUS_PIN == HIGH) {
+  //delay(1000);
+  if(digitalRead(POWER_STATUS_PIN) == HIGH) {
+    //power should not be on. turn it off
+     LOG_INFO_LN("Power is On. Turning it off");
     _e_state = POWER_ON;
+    powerOff();
   } else {
     _e_state = POWER_OFF;
-  }*/
-  _e_state = OUT_OF_ENUM_STATE;
-  delay(2000);
+    LOG_INFO_LN("Power is off.");
+  }
   LOG_INFO_LN("Hoverboard init done.");
 }
 
@@ -272,7 +275,8 @@ void Hoverboard::powerOffAsync(void)
 void Hoverboard::timerIt(void)
 {
   LOG_DEBUG_LN("In timer");
-  if(_instance->_e_state == POWERING_ON)
+  _instance->_timer.end();
+  if(_instance->_e_state == POWERING_ON && digitalRead(POWER_STATUS_PIN) == HIGH)
   {
     digitalWrite(POWER_PIN, LOW);
     LOG_DEBUG_LN("%d - Hoverboard turned on",micros());
@@ -281,28 +285,16 @@ void Hoverboard::timerIt(void)
   }
   else if(_instance->_e_state == POWERING_OFF)
   {
-    _instance->_e_state = POWER_OFF;
-    //LOG_DEBUG_LN("Hoverboard turned off");
-    LOG_DEBUG_LN("%d - Hoverboard turned off",micros());
-
-    //end workaround
     digitalWrite(POWER_PIN, LOW);
+    while(digitalRead(POWER_STATUS_PIN) == HIGH) {
+      delay(500);
+      LOG_DEBUG_LN("%d - Waiting for POWER_STATUS_PIN to go low...",micros());
+    }
+    _instance->_e_state = POWER_OFF;
+    LOG_DEBUG_LN("%d - Hoverboard turned off",micros());
     digitalWrite(ONBOARD_LED, LOW);
   }
-  //if motors are still running we cannot power off, do we need to check this?
-
-  _instance->_timer.end();
 }
-/*
-void Hoverboard::powerOffIt(void)
-{
-  //detachInterrupt(POWER_STATUS_PIN); 
-  if(POWER_STATUS_PIN == LOW)
-  {
-    _instance->_e_state = POWER_OFF;
-  } 
-  //attachInterrupt(POWER_STATUS_PIN, Hoverboard::powerOffIt, RISING); 
-}*/
 
 void Hoverboard::control(void)
 {

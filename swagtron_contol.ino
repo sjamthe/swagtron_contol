@@ -27,8 +27,10 @@
  * 
  * 'ON' = POWER_ON
  * 'OFF' = POWER_OFF
- * 'SET <sp1> <sp2> = Set speed where <sp1> and <sp2> are int between -10 and 10
- *                    sp1 is for left wheel and sp2 is for rt. + is forward - is reverse
+ * 'F' <msecs> (how many seconds to move forward) cannot be more than MAX_RUN_TIME)
+ * 'B' <msecs> (how many seconds to move backword) cannot be more than MAX_RUN_TIME)
+ * 'L' turn left
+ * 'R' rurn right
  ****************************************/
 
  /**************************************************************************
@@ -37,12 +39,12 @@
 static CmdListener _cmdListener;
 Hoverboard _p_hoverboard;
 Hoverboard* Hoverboard::_instance = NULL;
+bool lognow = true;
 
 void setup() {
    LOG_SERIAL.begin(LOG_SPEED);
    LOG_INIT_STREAM(LOG_LEVEL, &LOG_SERIAL);
    /** Wait 1s to get setup logs */
-   delay(1000);
    _cmdListener.init();
    _p_hoverboard.init();
 }
@@ -50,9 +52,6 @@ void setup() {
 void loop() {  
   _cmdListener.pollCmd();
   _p_hoverboard.control();
-  if(_p_hoverboard.runTimer > MAX_RUN_TIME) { 
-    _cmdListener.emergencyStop();
-  }
 }
 
 CmdListener::CmdListener()
@@ -137,29 +136,50 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
 {
   if(cmd == "ON" || cmd == "on") {
     LOG_INFO_LN("Powering On");
-    _p_hoverboard.powerontarget = true;
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_ON;
     return;
   } else if (cmd == "OFF" || cmd == "off") {
     LOG_INFO_LN("Powering Off");
-    _p_hoverboard.powerontarget = false;
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_OFF;
     return;
-  } else if(cmd == "SET" || cmd == "set") {
-    _p_hoverboard.leftspeedtarget = arg1;
-    _p_hoverboard.rightspeedtarget = arg2;
+  } else if(cmd == "F" || cmd == "f") {
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_FORWARD;
+    _p_hoverboard.forward = true;
+    _p_hoverboard.motion = true;
+    _p_hoverboard.turn = false;
+    _p_hoverboard.idlegap = false;
     _p_hoverboard.runTimer = 0; //Reset timer
-    LOG_INFO_LN("Setting speed to left (%d), right (%d)",_p_hoverboard.leftspeedtarget,
-                  _p_hoverboard.rightspeedtarget);
+    _p_hoverboard.runtime = arg1; //how long to run
+    LOG_INFO_LN("Moving Forward");
+  } else if(cmd == "B" || cmd == "b") {
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_BACKWARD;
+    _p_hoverboard.forward = false;
+    _p_hoverboard.motion = true;
+    _p_hoverboard.turn = false;
+    _p_hoverboard.idlegap = false;
+    _p_hoverboard.runTimer = 0; //Reset timer
+    _p_hoverboard.runtime = arg1; //how long to run
+    LOG_INFO_LN("Moving Backward");
+  } else if(cmd == "L" || cmd == "l") {
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_LEFT;
+    _p_hoverboard.forward = true;
+    _p_hoverboard.motion = true;
+    _p_hoverboard.turn = true;
+    _p_hoverboard.idlegap = false;
+    _p_hoverboard.runTimer = 0; //Reset timer
+    LOG_INFO_LN("Turn Left");
+  } else if(cmd == "R" || cmd == "r") {
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_RIGHT;
+    _p_hoverboard.forward = false;
+    _p_hoverboard.motion = true;
+    _p_hoverboard.turn = true;
+    _p_hoverboard.idlegap = false;
+    _p_hoverboard.runTimer = 0; //Reset timer
+    LOG_INFO_LN("Turn Right");
+  } else {
+    _p_hoverboard._e_cmd = _p_hoverboard.CMD_UNKNOWN;
   }
-}
-
-void CmdListener::emergencyStop()
-{
-  if(_p_hoverboard.leftspeedtarget != 0 || _p_hoverboard.rightspeedtarget != 0) {
-    LOG_INFO_LN("Exceeded %d ms in MAX_RUN_TIME. Stopping hoverboard",MAX_RUN_TIME);
-    _p_hoverboard.leftspeedtarget = 0;
-    _p_hoverboard.rightspeedtarget = 0;
-    _p_hoverboard.runTimer = 0;
-  }
+  
 }
 
 //hoverboard class
@@ -174,43 +194,36 @@ void Hoverboard::init(void)
   //called only once from setup()
   pinMode(ONBOARD_LED, OUTPUT);
   pinMode(POWER_STATUS_PIN, INPUT); 
-  //attachInterrupt(POWER_STATUS_PIN, Hoverboard::powerOffIt, RISING); 
+  pinMode(POWER_PIN, OUTPUT);
+
   LEFT_MOTOR.begin(MOTOR_BAUD, MOTOR_CONFIG);
   RIGHT_MOTOR.begin(MOTOR_BAUD, MOTOR_CONFIG);
+  /*
   if(POWER_STATUS_PIN == HIGH) {
     _e_state = POWER_ON;
   } else {
     _e_state = POWER_OFF;
-  }
-    
+  }*/
+  _e_state = OUT_OF_ENUM_STATE;
+  delay(2000);
   LOG_INFO_LN("Hoverboard init done.");
 }
 
 void Hoverboard::powerOn(void)
 {
-  if(_e_state == POWER_OFF)
+  if(_e_state == POWER_OFF || _e_state == OUT_OF_ENUM_STATE )
   {
     powerOnAsync();
-    /*while(_e_state != POWER_ON)
-    {
-      /** TODO : IDLE control *
-      LOG_DEBUG_LN("idle for power on state %d",_e_state);
-    }*/
-  }
-  else
-  {
-    //LOG_DEBUG_LN("already powered on %d",_e_state);
   }
 } 
 
 void Hoverboard::powerOnAsync(void)
 {
-  leftspeedtarget = 0.0;
-  rightspeedtarget = 0.0; 
+  motion = false; 
   _e_state = POWERING_ON;
     
   digitalWrite(POWER_PIN, HIGH);
-  LOG_DEBUG_LN("Is power_pin high?");
+  //LOG_DEBUG_LN("Is power_pin high?");
   
   //The timer helps hold the pin high for SHORT_PRESS_DUR_MS milliseconds
   _timer.begin(Hoverboard::timerIt, SHORT_PRESS_DUR_MS*1000); 
@@ -225,19 +238,15 @@ void Hoverboard::powerOff(void)
     {
       /** TODO : IDLE control */
     }
+    LOG_DEBUG_LN("power off complete");
   } 
-  else
-  {
-    LOG_DEBUG_LN("already powered off");
-  }
 }
 
 void Hoverboard::powerOffAsync(void)
 {
   if(_e_state != POWER_OFF || _e_state != POWERING_OFF)
   {
-    leftspeedtarget = 0.0;
-    rightspeedtarget = 0.0;
+    motion = false;
     _e_state = POWERING_OFF;
     digitalWrite(POWER_PIN, HIGH);
     /** POWER OFF detected on rising edge => increasing press duration makes power off
@@ -246,47 +255,32 @@ void Hoverboard::powerOffAsync(void)
   }
 }
 
-//POWER_PIN is held low by timer for both power on and off. 
+//POWER_PIN is held high by timer for both power on and off. 
 void Hoverboard::timerIt(void)
 {
   LOG_DEBUG_LN("In timer");
   if(_instance->_e_state == POWERING_ON)
   {
-    //temp work around till we connect power pin
-    while(digitalRead(POWER_STATUS_PIN) == LOW) {
-      LOG_DEBUG_LN("Turn on the hoverboard...");
-     delay(1000);
-    }
-    //end workaround
     digitalWrite(POWER_PIN, LOW);
-    if(digitalRead(POWER_STATUS_PIN) == HIGH)
-    {
-      LOG_DEBUG_LN("Hoverboard turned on");
-      _instance->_e_state = POWER_ON;
-      digitalWrite(ONBOARD_LED, HIGH);
-      _instance->startsignals();
-    }
+    LOG_DEBUG_LN("%d - Hoverboard turned on",micros());
+    _instance->_e_state = POWER_ON;
+    digitalWrite(ONBOARD_LED, HIGH);
   }
   else if(_instance->_e_state == POWERING_OFF)
   {
-    //temp work around till we connect power pin
-    while(digitalRead(POWER_STATUS_PIN) == HIGH) {
-      LOG_DEBUG_LN("Turn off the hoverboard...");
-      delay(1000);
-    }
     _instance->_e_state = POWER_OFF;
-    LOG_DEBUG_LN("Hoverboard turned off");
+    //LOG_DEBUG_LN("Hoverboard turned off");
+    LOG_DEBUG_LN("%d - Hoverboard turned off",micros());
+
     //end workaround
     digitalWrite(POWER_PIN, LOW);
     digitalWrite(ONBOARD_LED, LOW);
-    /** Hoverbot not yet stopped - it is stopped on falling edge
-     * => POWER OFF will be detected in POWER_OFF it */
   }
   //if motors are still running we cannot power off, do we need to check this?
 
   _instance->_timer.end();
 }
-
+/*
 void Hoverboard::powerOffIt(void)
 {
   //detachInterrupt(POWER_STATUS_PIN); 
@@ -295,21 +289,25 @@ void Hoverboard::powerOffIt(void)
     _instance->_e_state = POWER_OFF;
   } 
   //attachInterrupt(POWER_STATUS_PIN, Hoverboard::powerOffIt, RISING); 
-}
+}*/
 
 void Hoverboard::control(void)
 {
   // This function should send commands to each motor in a loop
-  if(powerontarget == true && (_e_state != POWER_ON && _e_state != POWERING_ON))
+  if(_e_cmd == CMD_ON)
   {
     powerOn();
   }
-  else if(powerontarget == false && (_e_state != POWER_OFF && _e_state != POWERING_OFF)) {
+  else if(_e_cmd == CMD_OFF) {
     powerOff();
   }
-  else if(_e_state == POWER_ON){
+  else if(_e_state == POWER_ON) {
+    startsignals();
+  }
+  else if(_e_state == RUNNING) {
     run();
   }
+  _e_cmd = _p_hoverboard.CMD_UNKNOWN;
 }
 
 //start sending initial signals to motors. this is called after power is turned on.
@@ -333,103 +331,97 @@ void Hoverboard::startsignals(void)
       write9bit(start_pattern3[index], start_pattern3[index]);
     }  
   }
-  LOG_INFO_LN("gyro turned on");
-
-  //Warmup - is this dependent on direction? test out then simplify
-  left_speed = 0;
-  rt_speed = 0;
-  
-  int left_change, rt_change;
-  //ramup/down depends on direction of motion.
-  //for left motor > 0 is forward < 0 is backward
-  if(leftspeedtarget > 0) {
-    left_change = 1;
-  } else {
-    left_change = -1;
-  }
-  if(rightspeedtarget > 0) {
-    rt_change = 1;
-  } else {
-    rt_change = -1;
-  }
-
-  uint16_t left_writeval, rt_writeval;
+  //warmup/idle pattern
   for(uint8_t i = 0; i < warmuprepeat; i++) {
-    left_speed += left_change;
-    rt_speed += rt_change;
-    for(uint8_t index = 0; index < GYRO_FRAME_LENGTH; index++)
-    {
-      //reverse rt_motor direction by multiplying by -1
-      if(index == 0 || index == 2) {
-         left_writeval = (uint8_t)(left_speed & 0xff);
-         rt_writeval = (uint8_t)(-1*rt_speed & 0xff);
-        write9bit(left_writeval, rt_writeval);
-      }
-      else if (index == 1 || index == 3) {
-         left_writeval = (uint8_t)(left_speed >> 8 & 0xff);
-         rt_writeval = (uint8_t)(-1*rt_speed >> 8 & 0xff);
-        write9bit(left_writeval, rt_writeval);
-      }
-      else {
-        write9bit(stop_pattern[index], stop_pattern[index]); 
-      }
+    for(uint8_t index = 0; index < GYRO_FRAME_LENGTH; index++) {
+      write9bit(stop_pattern[index], stop_pattern[index]); 
     }
   }
-  left_speed = 0;
-  rt_speed = 0;
-  LOG_INFO_LN("Warmup done");
-  
+  _e_state = RUNNING;
+  lognow = true;
+  LOG_INFO_LN("%d - Warmup done, motors are idle", micros());
 }
 
+//if power if on this function has to send signals all to motors all the time.
 void Hoverboard::run(void)
 {
-  //ramup/down depends on direction of motion.
-  //for left motor > 0 is forward < 0 is backward
-  if(leftspeedtarget >= 0 && left_speed < SPEED_LIMIT*256 && left_speed < leftspeedtarget*128) {
-    left_speed += 1;
-  } 
-  else if (leftspeedtarget <= 0 && left_speed > -1*SPEED_LIMIT*256 && left_speed > leftspeedtarget*128) {
-    left_speed -= 1;
+  if(motion) {
+    //emergency stop
+    if(runTimer > MAX_RUN_TIME) { 
+      LOG_INFO_LN("Exceeded %d ms in MAX_RUN_TIME. Stopping hoverboard",MAX_RUN_TIME);
+      motion = false;
+    }
+      //if we are turning we need to stop turning after TURN_TIME_LIMIT
+    if(turn && runTimer > TURN_TIME_LIMIT) { 
+      motion = false;
+      turn = false;
+    }
+    if(motion && runTimer > runtime) {
+      motion = false;
+    }
+    //introduce idlegap here, to keep constant speed we should run not more than 
+    //2000 ms then idle for 1000 ms
+    if(int(runTimer/500)%3 == 2) {
+      idlegap = true; //was true
+    } else {
+      idlegap = false;
+    }
   }
-  //for rt motor it is reverse of left.
-  if(rightspeedtarget >= 0 && rt_speed < SPEED_LIMIT*256 && rt_speed < rightspeedtarget*128) {
-    rt_speed += 1;
-  } 
-  else if (rightspeedtarget <= 0 && rt_speed > -1*SPEED_LIMIT*256 && rt_speed > rightspeedtarget*128) {
-    rt_speed -= 1;
+  
+  if(turn) {
+    if(forward) {
+      left_speed = TURN_SPEED_LIMIT;
+      rt_speed = TURN_SPEED_LIMIT; //same speeds to turn
+    } else {
+      left_speed = 65535-TURN_SPEED_LIMIT;
+      rt_speed = 65535-TURN_SPEED_LIMIT;
+    }
+  } else {
+    if(forward) {
+      left_speed = SPEED_LIMIT;
+      rt_speed = 65535 - SPEED_LIMIT;
+    } else {
+      left_speed = 65535 - SPEED_LIMIT;
+      rt_speed = SPEED_LIMIT;
+    }
   }
+  //for idlegap speeds are 0
+  if(idlegap || !motion) {
+    left_speed = 0;
+    rt_speed = 0;
+  }
+  
   uint16_t left_writeval, rt_writeval;
   for(uint8_t index = 0; index < GYRO_FRAME_LENGTH; index++)
   {
     //replace first 4 bytes with rampup/rampdown speed based on direction
     if(index == 0 || index == 2) {
       left_writeval = (uint8_t)(left_speed & 0xff);
-      rt_writeval = (uint8_t)(-1*rt_speed & 0xff);
-      write9bit(left_writeval, rt_writeval);
+      rt_writeval = (uint8_t)(rt_speed & 0xff);
     }
     else if (index == 1 || index == 3) {
       left_writeval = (uint8_t)(left_speed >> 8 & 0xff);
-      rt_writeval = (uint8_t)(-1*rt_speed >> 8 & 0xff);
-      write9bit(left_writeval, rt_writeval);
+      rt_writeval = (uint8_t)(rt_speed >> 8 & 0xff);
     }
     else { 
-        if(left_speed == 0) {
-          left_writeval = stop_pattern[index];
-        } else {
+        if(motion) {
           left_writeval = run_pattern[index];
-        }
-        if(rt_speed == 0) {
-          rt_writeval = stop_pattern[index];
-        } else {
           rt_writeval = run_pattern[index];
+        } else {
+          left_writeval = stop_pattern[index];
+          rt_writeval = stop_pattern[index];
         }
-        write9bit(left_writeval, rt_writeval); 
-      }
-  }  
+    }
+    write9bit(left_writeval, rt_writeval);
+  }
+  if(lognow) {
+    LOG_INFO_LN("%d - started 1st signal", micros()); 
+    lognow = false;
+  }
 }
 
 void Hoverboard::write9bit(uint16_t left_val, uint16_t rt_val) {
   LEFT_MOTOR.write9bit(left_val);
   RIGHT_MOTOR.write9bit(rt_val);
-  LOG_INFO_LN("%d",left_val);
+  //LOG_INFO_LN("%d",rt_val);
 }

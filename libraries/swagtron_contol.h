@@ -10,8 +10,13 @@
  **************************************************************************/
 #define LOG_SPEED 500000
 #define LOG_SERIAL Serial
-#define MAX_RUN_TIME 1000*10
-#define SHORT_PRESS_DUR_MS 100
+#define MAX_RUN_TIME 1000*4
+#define SPEED_LIMIT 20  //20 is lower than 40, 80, 120 (1 sec). almost no motion on 10
+
+#define TURN_TIME_LIMIT 200
+#define TURN_SPEED_LIMIT 100
+
+#define SHORT_PRESS_DUR_MS 500
 
 #define MOTOR_BAUD 52600
 #define MOTOR_CONFIG SERIAL_9N1
@@ -30,7 +35,6 @@
 * Static members definitions
  **************************************************************************/
  //motor controls
-const uint16_t SPEED_LIMIT = 1;
 const uint8_t GYRO_FRAME_LENGTH = 11;
 const uint8_t GYRO_CONTACT_CLOSED_BYTE = 85;
 const uint8_t GYRO_CONTACT_OPENED_BYTE = 170;
@@ -73,13 +77,25 @@ const int warmuprepeat = 7;
  class Hoverboard
  {
    public:
-     int leftspeedtarget = 0;
-     int rightspeedtarget = 0;
-     bool powerontarget = false;
-     elapsedMillis runTimer = 0; //Is reset everytime Set is called.
-     void control(void);
-     void init(void);
-     Hoverboard();
+     typedef enum {
+      CMD_OFF = 0,
+      CMD_ON,
+      CMD_FORWARD,
+      CMD_BACKWARD,
+      CMD_LEFT,
+      CMD_RIGHT,
+      CMD_UNKNOWN
+    } EHoverboardCmd;
+
+    volatile EHoverboardCmd _e_cmd = CMD_UNKNOWN;
+    int leftspeedtarget = 0;
+    int rightspeedtarget = 0;
+    bool forward, turn, motion, idlegap;
+    uint16_t runtime; //how long to move forward or back
+    elapsedMillis runTimer = 0; //Is reset everytime Set is called.
+    void control(void);
+    void init(void);
+    Hoverboard();
 
   private:
     typedef enum {
@@ -87,7 +103,6 @@ const int warmuprepeat = 7;
      POWER_ON,
      POWERING_ON,
      POWERING_OFF,
-     IDLE,
      RUNNING,
      OUT_OF_ENUM_STATE
     } EHoverboardState;
@@ -104,7 +119,7 @@ const int warmuprepeat = 7;
     void startsignals(void); //This starts sending gyro signals.
     void run(void); //This function is called repetedly to control speed
     void write9bit(uint16_t leftmotor_byte, uint16_t rtmotor_byte);
-    int left_speed, rt_speed;
+    int left_speed, rt_speed; //actual speed set for motors
  };
 
 

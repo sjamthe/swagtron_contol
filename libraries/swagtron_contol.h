@@ -10,11 +10,11 @@
  **************************************************************************/
 #define LOG_SPEED 500000
 #define LOG_SERIAL Serial
-#define MAX_RUN_TIME 1000*4
+#define MAX_RUN_TIME 1000*4 // 8000 is not exceeding but too fast
 #define SPEED_LIMIT 20  //20 is lower than 40, 80, 120 (1 sec). almost no motion on 10
 
-#define TURN_TIME_LIMIT 200
-#define TURN_SPEED_LIMIT 100
+#define TURN_TIME_LIMIT 4000
+#define TURN_SPEED_LIMIT 96 //calibrated for 3600/circle
 
 #define SHORT_PRESS_DUR_MS 500
 
@@ -88,6 +88,7 @@ const int warmuprepeat = 7;
     } EHoverboardCmd;
 
     volatile EHoverboardCmd _e_cmd = CMD_UNKNOWN;
+    volatile EHoverboardCmd _e_pcmd = CMD_UNKNOWN;
     int leftspeedtarget = 0;
     int rightspeedtarget = 0;
     bool forward, turn, motion, idlegap;

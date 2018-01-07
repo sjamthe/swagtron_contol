@@ -29,8 +29,8 @@
  * 'OFF' = POWER_OFF
  * 'F' <msecs> (how many seconds to move forward) cannot be more than MAX_RUN_TIME)
  * 'B' <msecs> (how many seconds to move backword) cannot be more than MAX_RUN_TIME)
- * 'L' turn left
- * 'R' rurn right
+ * 'L' <degree*10> turn left
+ * 'R' <degree*10> rurn right
  ****************************************/
 
  /**************************************************************************
@@ -134,6 +134,8 @@ void CmdListener::pollCmd(void)
 
 void CmdListener::handleCommand(String cmd, int arg1, int arg2)
 {
+  bool prev_motion = _p_hoverboard.motion;
+  
   if(cmd == "ON" || cmd == "on") {
     LOG_INFO_LN("Powering On");
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_ON;
@@ -148,38 +150,49 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = false;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runTimer = 0; //Reset timer
     _p_hoverboard.runtime = arg1; //how long to run
-    LOG_INFO_LN("Moving Forward");
+    LOG_INFO_LN("Moving Forward by %d",arg1);
   } else if(cmd == "B" || cmd == "b") {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_BACKWARD;
     _p_hoverboard.forward = false;
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = false;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runTimer = 0; //Reset timer
     _p_hoverboard.runtime = arg1; //how long to run
-    LOG_INFO_LN("Moving Backward");
+    LOG_INFO_LN("Moving Backward by %d",arg1);
   } else if(cmd == "L" || cmd == "l") {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_LEFT;
     _p_hoverboard.forward = true;
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = true;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runTimer = 0; //Reset timer
-    LOG_INFO_LN("Turn Left");
+    _p_hoverboard.runtime = arg1; //how long to run
+    LOG_INFO_LN("Turn Left by %d",arg1);
   } else if(cmd == "R" || cmd == "r") {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_RIGHT;
     _p_hoverboard.forward = false;
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = true;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runTimer = 0; //Reset timer
-    LOG_INFO_LN("Turn Right");
+    _p_hoverboard.runtime = arg1; //how long to run
+    LOG_INFO_LN("Turn Right by %d",arg1);
   } else {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_UNKNOWN;
   }
-  
+
+  //Don't reset timer of cmd is same as cmd as it was issued within MAX_RUN_TIME
+  if (_p_hoverboard.turn) {
+    _p_hoverboard.runTimer = 0;   
+  } else {
+    if(prev_motion && _p_hoverboard.runTimer < MAX_RUN_TIME && 
+        _p_hoverboard._e_cmd == _p_hoverboard._e_pcmd) {
+      //don't reset if we were moving in the same way
+      LOG_DEBUG_LN("%d - timer not rest at %d for cmd %d",micros(), _p_hoverboard.runTimer, _p_hoverboard._e_cmd);
+    } else {
+      _p_hoverboard.runTimer = 0;
+    }
+  }
+  _p_hoverboard._e_pcmd = _p_hoverboard._e_cmd;
 }
 
 //hoverboard class
@@ -361,11 +374,11 @@ void Hoverboard::run(void)
     }
     //introduce idlegap here, to keep constant speed we should run not more than 
     //2000 ms then idle for 1000 ms
-    if(int(runTimer/500)%3 == 2) {
+    /*if(int(runTimer/500)%3 == 2 && !turn) {
       idlegap = true; //was true
     } else {
       idlegap = false;
-    }
+    }*/
   }
   
   if(turn) {

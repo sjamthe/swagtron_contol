@@ -324,7 +324,7 @@ void Hoverboard::timerIt(void)
 }
 
 void Hoverboard::control(void)
-{
+{    
   // This function should send commands to each motor in a loop
   if(_e_cmd == CMD_ON)
   {
@@ -337,7 +337,13 @@ void Hoverboard::control(void)
     startsignals();
   }
   else if(_e_state == RUNNING) {
-    run();
+    // Hoverboard has an auto-power off. detect the pin state to make sure it is HIGH
+    if(digitalRead(POWER_STATUS_PIN) == HIGH) {   
+      run();
+    } else {
+      _e_state = POWER_OFF;
+      LOG_DEBUG_LN("Auto power off detected at %d",micros());
+    }
   }
   _e_cmd = _p_hoverboard.CMD_UNKNOWN;
 }

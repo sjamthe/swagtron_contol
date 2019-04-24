@@ -10,7 +10,9 @@
  **************************************************************************/
 #define LOG_SPEED 500000
 #define LOG_SERIAL Serial
-#define MAX_RUN_TIME 1000*20 // 8000 is not exceeding but too fast
+#define MAX_RUN_TIME 1000*10 // 8000 is not exceeding but too fast
+#define NOHALL_MAX_RUN_TIME 1000*4 // 8000 is not exceeding but too fast
+
 #define SPEED_LIMIT 30  //20 is lower than 40, 80, 120 (1 sec). almost no motion on 10
 
 #define TURN_TIME_LIMIT 4000
@@ -93,15 +95,15 @@ const int warmuprepeat = 7;
     int leftspeedtarget = 0;
     int rightspeedtarget = 0;
     bool forward, turn, motion, idlegap;
-    uint16_t runtime; //how long to move forward or back
+    uint16_t runcount; //how long to move forward or back
     elapsedMillis runTimer = 0; //Is reset everytime Set is called.
     void control(void);
     void init(void);
 
     //Hall sensor counter for measuring speed and distance
     int hallCounter = 0;   // counter for the number of button presses
-    int hallPinState = -1;         // current state of the button
-    int lastHallPinState = -1;     // previous state of the button
+    int hallPinState = 0;         // current state of the button
+    int lastHallPinState = 0;     // previous state of the button
     uint16_t hallMicros = 0; // micro secs since counter incremented
     uint16_t hallMicroDiff = 0; // diff since last counter
 

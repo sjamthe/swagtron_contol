@@ -10,8 +10,8 @@
  **************************************************************************/
 #define LOG_SPEED 500000
 #define LOG_SERIAL Serial
-#define MAX_RUN_TIME 1000*4 // 8000 is not exceeding but too fast
-#define SPEED_LIMIT 20  //20 is lower than 40, 80, 120 (1 sec). almost no motion on 10
+#define MAX_RUN_TIME 1000*20 // 8000 is not exceeding but too fast
+#define SPEED_LIMIT 30  //20 is lower than 40, 80, 120 (1 sec). almost no motion on 10
 
 #define TURN_TIME_LIMIT 4000
 #define TURN_SPEED_LIMIT 96 //calibrated for 3600/circle
@@ -26,6 +26,7 @@
 #define ONBOARD_LED 13
 #define POWER_PIN 14
 #define POWER_STATUS_PIN 2
+#define HALL_PIN 23
 
 /**************************************************************************
  * Type Definitions
@@ -96,6 +97,14 @@ const int warmuprepeat = 7;
     elapsedMillis runTimer = 0; //Is reset everytime Set is called.
     void control(void);
     void init(void);
+
+    //Hall sensor counter for measuring speed and distance
+    int hallCounter = 0;   // counter for the number of button presses
+    int hallPinState = -1;         // current state of the button
+    int lastHallPinState = -1;     // previous state of the button
+    uint16_t hallMicros = 0; // micro secs since counter incremented
+    uint16_t hallMicroDiff = 0; // diff since last counter
+
     Hoverboard();
 
   private:
@@ -120,6 +129,7 @@ const int warmuprepeat = 7;
     void startsignals(void); //This starts sending gyro signals.
     void run(void); //This function is called repetedly to control speed
     void write9bit(uint16_t leftmotor_byte, uint16_t rtmotor_byte);
+    void hallPinCounter(); //count the ticks from hall pin, and micros between
     int left_speed, rt_speed; //actual speed set for motors
  };
 

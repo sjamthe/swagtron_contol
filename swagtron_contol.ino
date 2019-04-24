@@ -45,6 +45,7 @@ void setup() {
    LOG_SERIAL.begin(LOG_SPEED);
    LOG_INIT_STREAM(LOG_LEVEL, &LOG_SERIAL);
    delay(2000);
+
    /** Wait 1s to get setup logs */
    _cmdListener.init();
    _p_hoverboard.init();
@@ -54,6 +55,7 @@ void loop() {
   _cmdListener.pollCmd();
   _p_hoverboard.control();
 }
+
 
 CmdListener::CmdListener()
 {
@@ -183,7 +185,8 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
 
   //Don't reset timer of cmd is same as cmd as it was issued within MAX_RUN_TIME
   if (_p_hoverboard.turn) {
-    _p_hoverboard.runTimer = 0;   
+    _p_hoverboard.runTimer = 0;
+    _p_hoverboard.hallCounter = 0;   
   } else {
     if(prev_motion && _p_hoverboard.runTimer < MAX_RUN_TIME && 
         _p_hoverboard._e_cmd == _p_hoverboard._e_pcmd) {
@@ -191,6 +194,7 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
       LOG_DEBUG_LN("%d - timer not rest at %d for cmd %d",micros(), _p_hoverboard.runTimer, _p_hoverboard._e_cmd);
     } else {
       _p_hoverboard.runTimer = 0;
+      _p_hoverboard.hallCounter = 0;
     }
   }
   _p_hoverboard._e_pcmd = _p_hoverboard._e_cmd;
@@ -209,6 +213,7 @@ void Hoverboard::init(void)
   pinMode(ONBOARD_LED, OUTPUT);
   pinMode(POWER_STATUS_PIN, INPUT); 
   pinMode(POWER_PIN, OUTPUT);
+  pinMode(HALL_PIN, INPUT);
 
   LEFT_MOTOR.begin(MOTOR_BAUD, MOTOR_CONFIG);
   RIGHT_MOTOR.begin(MOTOR_BAUD, MOTOR_CONFIG);
@@ -223,6 +228,28 @@ void Hoverboard::init(void)
     LOG_INFO_LN("Power is off.");
   }
   LOG_INFO_LN("Hoverboard init done.");
+}
+
+void Hoverboard::hallPinCounter() {
+  // read the pushbutton input pin:
+  hallPinState = digitalRead(HALL_PIN);
+
+  // compare the buttonState to its previous state
+  if (hallPinState != lastHallPinState) {
+    // if the state has changed, increment the counter
+    if (hallPinState == LOW) {
+      hallCounter++;
+      if(hallCounter > 0) {
+        hallMicroDiff = micros()-hallMicros;
+        LOG_INFO_LN("hallCounter: %d - micros %d",hallCounter, hallMicroDiff);
+        hallMicros = micros();
+      }
+    } 
+
+  }
+  // save the current state as the last state, 
+  //for next time through the loop
+  lastHallPinState = hallPinState;
 }
 
 void Hoverboard::powerOn(void)
@@ -351,17 +378,24 @@ void Hoverboard::startsignals(void)
 void Hoverboard::run(void)
 {
   if(motion) {
+    //measure movement from hallpin
+    hallPinCounter();
     //emergency stop
-    if(runTimer > MAX_RUN_TIME) { 
+    if(runTimer > MAX_RUN_TIME && !turn) { 
       LOG_INFO_LN("Exceeded %d ms in MAX_RUN_TIME. Stopping hoverboard",MAX_RUN_TIME);
       motion = false;
     }
       //if we are turning we need to stop turning after TURN_TIME_LIMIT
     if(turn && runTimer > TURN_TIME_LIMIT) { 
+      LOG_INFO_LN("Exceeded %d ms in TURN_TIME_LIMIT. Stopping hoverboard",TURN_TIME_LIMIT);
       motion = false;
       turn = false;
     }
-    if(motion && runTimer > runtime) {
+    /*if(motion && runTimer > runtime) {
+      motion = false;
+    }*/
+    //test runtime as runHallCounter
+    if(motion && hallCounter >= runtime) {
       motion = false;
     }
     //introduce idlegap here, to keep constant speed we should run not more than 
@@ -382,12 +416,20 @@ void Hoverboard::run(void)
       rt_speed = 65535-TURN_SPEED_LIMIT;
     }
   } else {
+    int limit = SPEED_LIMIT;
+    // testing throttling for arbitrary 100ms
+    if(hallMicroDiff < 100000 ) {
+      limit = 5;
+    }
+    else if(hallMicroDiff < 60000 ) {
+      limit = 1;
+    }
     if(forward) {
-      left_speed = SPEED_LIMIT;
-      rt_speed = 65535 - SPEED_LIMIT;
+      left_speed = limit;
+      rt_speed = 65535 - limit;
     } else {
-      left_speed = 65535 - SPEED_LIMIT;
-      rt_speed = SPEED_LIMIT;
+      left_speed = 65535 - limit;
+      rt_speed = limit;
     }
   }
   //for idlegap speeds are 0

@@ -153,7 +153,7 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = false;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runtime = arg1; //how long to run
+    _p_hoverboard.runcount = arg1; //how long to run
     LOG_INFO_LN("Moving Forward by %d",arg1);
   } else if(cmd == "B" || cmd == "b") {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_BACKWARD;
@@ -161,7 +161,7 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = false;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runtime = arg1; //how long to run
+    _p_hoverboard.runcount = arg1; //how long to run
     LOG_INFO_LN("Moving Backward by %d",arg1);
   } else if(cmd == "L" || cmd == "l") {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_LEFT;
@@ -169,7 +169,7 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = true;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runtime = arg1; //how long to run
+    _p_hoverboard.runcount = arg1; //how long to run
     LOG_INFO_LN("Turn Left by %d",arg1);
   } else if(cmd == "R" || cmd == "r") {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_RIGHT;
@@ -177,7 +177,7 @@ void CmdListener::handleCommand(String cmd, int arg1, int arg2)
     _p_hoverboard.motion = true;
     _p_hoverboard.turn = true;
     _p_hoverboard.idlegap = false;
-    _p_hoverboard.runtime = arg1; //how long to run
+    _p_hoverboard.runcount = arg1; //how long to run
     LOG_INFO_LN("Turn Right by %d",arg1);
   } else {
     _p_hoverboard._e_cmd = _p_hoverboard.CMD_UNKNOWN;
@@ -372,6 +372,10 @@ void Hoverboard::startsignals(void)
   _e_state = RUNNING;
   lognow = true;
   LOG_INFO_LN("%d - Warmup done, motors are idle", micros());
+
+  hallPinState = digitalRead(HALL_PIN);
+  LOG_INFO_LN("Hall pin read is %d", hallPinState);
+  
 }
 
 //if power if on this function has to send signals all to motors all the time.
@@ -385,26 +389,21 @@ void Hoverboard::run(void)
       LOG_INFO_LN("Exceeded %d ms in MAX_RUN_TIME. Stopping hoverboard",MAX_RUN_TIME);
       motion = false;
     }
+    if(runTimer > NOHALL_MAX_RUN_TIME && hallCounter <= 1) { 
+      LOG_INFO_LN("Exceeded %d ms in NOHALL_MAX_RUN_TIME. Stopping hoverboard",NOHALL_MAX_RUN_TIME);
+      motion = false;
+    }
       //if we are turning we need to stop turning after TURN_TIME_LIMIT
     if(turn && runTimer > TURN_TIME_LIMIT) { 
       LOG_INFO_LN("Exceeded %d ms in TURN_TIME_LIMIT. Stopping hoverboard",TURN_TIME_LIMIT);
       motion = false;
       turn = false;
     }
-    /*if(motion && runTimer > runtime) {
-      motion = false;
-    }*/
-    //test runtime as runHallCounter
-    if(motion && hallCounter >= runtime) {
+
+    //test runcount as runHallCounter
+    if(motion && hallCounter >= runcount) {
       motion = false;
     }
-    //introduce idlegap here, to keep constant speed we should run not more than 
-    //2000 ms then idle for 1000 ms
-    /*if(int(runTimer/500)%3 == 2 && !turn) {
-      idlegap = true; //was true
-    } else {
-      idlegap = false;
-    }*/
   }
   
   if(turn) {
@@ -418,10 +417,10 @@ void Hoverboard::run(void)
   } else {
     int limit = SPEED_LIMIT;
     // testing throttling for arbitrary 100ms
-    if(hallMicroDiff < 100000 ) {
+    if(hallCounter > 1 &&  hallMicroDiff < 100000 ) {
       limit = 5;
     }
-    else if(hallMicroDiff < 60000 ) {
+    else if(hallCounter > 1 && hallMicroDiff < 60000 ) {
       limit = 1;
     }
     if(forward) {

@@ -29,6 +29,7 @@ public:
     void Init(int level, Stream*  arg_p_output_stream)
     {
       _p_output_stream = arg_p_output_stream;
+      _p_output_stream.begin(LOG_SPEED);
       _u8_logLevel = constrain(level,LOG_LEVEL_NOOUTPUT,LOG_LEVEL_DEBUG);
     }
     

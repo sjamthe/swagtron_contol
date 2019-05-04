@@ -42,20 +42,44 @@ Hoverboard* Hoverboard::_instance = NULL;
 bool lognow = true;
 
 void setup() {
-   LOG_SERIAL.begin(LOG_SPEED);
+
+#ifndef USE_ROS
    LOG_INIT_STREAM(LOG_LEVEL, &LOG_SERIAL);
    delay(2000);
-
+#endif   
    /** Wait 1s to get setup logs */
    _cmdListener.init();
+#ifdef USE_ROS   
+   nh.initNode();
+   nh.subscribe(sub);
+#endif    
    _p_hoverboard.init();
 }
 
 void loop() {  
+#ifdef USE_ROS
+  nh.spinOnce();
+#else
   _cmdListener.pollCmd();
+#endif
   _p_hoverboard.control();
 }
 
+#ifdef USE_ROS
+void messageCb(const std_msgs::String& cmd_msg)
+{
+  //Parse message here.
+  nh.loginfo(cmd_msg.data);
+  char * pch0 = strtok(cmd_msg.data, " "); //split based on space.
+  String cmd(F(pch0));
+  char * pch = strtok(NULL, " ");
+  int arg1 = atoi(pch);
+  nh.logdebug(pch0);
+  nh.logdebug(pch);
+  //call handleCommand
+  _cmdListener.handleCommand(cmd, arg1, arg1);
+}
+#endif
 
 CmdListener::CmdListener()
 {
@@ -67,6 +91,7 @@ void CmdListener::init(void)
   //init is called from setup, should be only once.
   LOG_INFO_LN("starting swagtron cmd listener ...");
 }
+
 
 /*
  * pollCmd: is called from the loop(), reads for incoming control commands.

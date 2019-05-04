@@ -1,17 +1,29 @@
 #ifndef SWAGTRON_CONTROL_H
 #define SWAGTRON_CONTROL_H
 
+#define USE_ROS
+
 /**************************************************************************
  * Include Files
  **************************************************************************/
+#ifdef USE_ROS
+#include <ros.h>
+ros::NodeHandle nh;
+
+#include <std_msgs/String.h>
+#include "roslog_config.h"
+void messageCb(const std_msgs::String& cmd_msg);
+ros::Subscriber<std_msgs::String> sub("hoverpi_cmd", messageCb );
+#else
 #include "logger_config.h"
+#define LOG_SPEED 500000
+#define LOG_SERIAL Serial
+#endif
 
 /**************************************************************************
  * Manifest Constants
  **************************************************************************/
 #define LOG_LEVEL LOG_LEVEL_DEBUG
-#define LOG_SPEED 500000
-#define LOG_SERIAL Serial
 
 #define MAX_RUN_TIME 1000*10 // 8000 is not exceeding but too fast
 #define NOHALL_MAX_RUN_TIME 1000*4 // 8000 is not exceeding but too fast
@@ -150,8 +162,6 @@ const int warmuprepeat = 7;
      void init(void);
      void pollCmd(void);
      void emergencyStop(void);
-
-   private:
      void handleCommand(String cmd, int arg1, int arg2);
  };
 

@@ -4,12 +4,15 @@
 /**************************************************************************
  * Include Files
  **************************************************************************/
-#include <logger_config.h>
+#include "logger_config.h"
+
 /**************************************************************************
  * Manifest Constants
  **************************************************************************/
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 #define LOG_SPEED 500000
 #define LOG_SERIAL Serial
+
 #define MAX_RUN_TIME 1000*10 // 8000 is not exceeding but too fast
 #define NOHALL_MAX_RUN_TIME 1000*4 // 8000 is not exceeding but too fast
 
@@ -21,6 +24,7 @@
 #define SHORT_PRESS_DUR_MS 500
 
 #define MOTOR_BAUD 52600
+//Remember to uncomment SERIAL_9BIT_SUPPORT in teensy3/HardwareSerial.h
 #define MOTOR_CONFIG SERIAL_9N1
 #define LEFT_MOTOR Serial1
 #define RIGHT_MOTOR Serial3
